@@ -1,0 +1,10 @@
+[package]
+name = "particle_filter" # the name of the package
+version = "0.0.1"    # the current version, obeying semver
+authors = [ "you@example.com" ]
+[[bin]]
+name = "particle_filter"
+path = "main.rs"
+[dependencies]
+rand="0.3.0"
+
