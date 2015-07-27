@@ -1,5 +1,7 @@
 extern crate rand;
 use rand::Rng;
+use rand::distributions::normal::StandardNormal;
+use std::mem;
 
 struct Robot {
     x: f32,
@@ -13,10 +15,29 @@ impl Robot {
         self.y += d_y;
         self.heading += d_heading;
     }
+    /*
+    fn sense(&mut self, landmarks) {
+    
+    	for i in landmarks.len() {
+    		dist = sqrt( (self.x - ) )
+    	
+    	} 
+    
+    
+    }*/
 }
 
 fn main() {
-
+	let x: &[(usize, usize)] = &[(1,2), (3,9)];
+	for &(a,b) in x.iter() {
+		println!("a is {}, b is {}", a, b);
+	}
+//	let vector: Vec<i32> = vec![(0,0), (10, 0)];
+	
+	
+	let StandardNormal(x) = rand::random();
+	println!("gaussian is {}", x);
+	
     let mut rng = rand::thread_rng();
     
     let mut my_bot = Robot { x: 0., y: 0., heading: (3.141/2.) };
@@ -44,7 +65,10 @@ fn main() {
         (*bot).x += 100.;
         println!("x location of bot is {}, iteration is {}", bot.x, index);
     }
-   */ 
+   */
+   
+   	
+    
     for bot in &mut v {
         (*bot).x += 1.;
         println!("x location of bot is {}", bot.x);
