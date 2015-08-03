@@ -76,10 +76,7 @@ fn predict(particles: &mut Vec<Particle>, mut distance: f32, turning_angle: f32)
 	let distance_noise: f32 = 0.25;
 	let turning_noise: f32 = 0.25;
 
-	distance += distance_noise * gaussian_sample();
-
-	
-	
+	distance += distance_noise * gaussian_sample();	
 	
 	let d_heading: f32 = turning_angle + (turning_noise * gaussian_sample());
     for p in particles {        
@@ -87,19 +84,26 @@ fn predict(particles: &mut Vec<Particle>, mut distance: f32, turning_angle: f32)
       	let d_x: f32 = distance * p.heading.cos();	//all this reassignment is intentional,
 		let d_y: f32 = distance * p.heading.sin();	//it helps the compiler infer types.
         (*p).x += d_x;
-        (*p).y += d_y;        
-        //println!("particle is at ({}, {}), facing {} rads", p.x, p.y, p.heading);
+        (*p).y += d_y; 
+        println!("particle is at ({}, {}), facing {} rads", p.x, p.y, p.heading);
     }
 }
 
+/*
+fn update(particles: &mut Vec<Particle>, measurements: &mut Vec<Measurement>) {
+
+	
+
+}
+*/
 
 fn main() {
 
-    let mut v: Vec<Particle> = generate_particles(30000);
+    let mut v: Vec<Particle> = generate_particles(3);	
         
 	println!("length of particle vector is {}",v.len());      
 
-	predict(&mut v, 10.1, 1.02);	//array of particles, distance, heading.
+	predict(&mut v, 10.1, 3.141);	//particles, distance, heading.
 
 
     
