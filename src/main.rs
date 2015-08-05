@@ -11,6 +11,7 @@
 let x: &[(f32, f32)] = &[(1.0,2.0), (3.0,9.0)];
 test_particle.get_distances(x);
 ------------------------------------------------	
+<niconii> neals: .pow() on integers, .powi() and .powf() on floats
 */
 
 
@@ -27,12 +28,13 @@ struct Distance_or_Coordinate {
     number: i32,
 }
 
-
 struct Particle {
     x: f32,
     y: f32,
     heading: f32,
 }
+
+
 
 impl Particle {
     fn move_particle(&mut self, d_x: f32, d_y: f32, d_heading: f32) {
@@ -84,30 +86,6 @@ fn generate_landmarks() -> Vec<Distance_or_Coordinate> {
 	return ls;
 }
 
-fn main() {
-
-    let mut v: Vec<Particle> = generate_particles(3);	
-        
-	println!("length of particle vector is {}",v.len());      
-
-	predict(&mut v, 10.1, 3.141);	//particles, distance, heading.
-
-    let mut test_particle = Particle { x: 0., y: 0., heading: (3.141/2.) };
-    test_particle.move_particle(1.5, 1.3, 1.2);	
-
-	let landmarks: Vec<Distance_or_Coordinate> = generate_landmarks();
-	let mut measurements: Vec<Distance_or_Coordinate> = take_measurement( test_particle,landmarks);
-	
-	for m in measurements.iter() {
-		println!("distances: ({},{})", measurements[(m.number-1) as usize].x,measurements[(m.number-1) as usize].y);	
-	}
-	
-
-
-    let y = rand::random::<f32>();
-    println!("{}", y);
-    
-}
 
 
 fn generate_particles(n: i32) -> Vec<Particle> {
@@ -158,18 +136,65 @@ fn predict(particles: &mut Vec<Particle>, mut distance: f32, turning_angle: f32)
     }
 }
 
-/*
-fn update(particles: &mut Vec<Particle>, measurements: &mut Vec<Measurement>) {
 
+fn update(particles: &mut Vec<Particle>, measurements: Vec<Distance_or_Coordinate>) {
+
+	let mut particle_weights: Vec<f32> = Vec::new();
 	
+	for _ in 0..particles.len() {
+		particle_weights.push(1.0);		
+	}
+	println!("particle weights are {} {} {}", particle_weights[0], particle_weights[1], particle_weights[2]);
+
+	let mut mu: Vec<Distance_or_Coordinate> = Vec::new();
+
+	for p in particles {		
+		mu = p.get_distances();
+		//for m in mu {
+			
+		
+		//}
+	
+	}	
+	
+	
+	
+}
+
+
+
+fn main() {
+
+    let mut v: Vec<Particle> = generate_particles(3);	
+        
+	println!("length of particle vector is {}",v.len());      
+
+	predict(&mut v, 10.1, 3.141);	//args: array of particles, distance, heading.
+
+    let mut test_particle = Particle { x: 0., y: 0., heading: (3.141/2.) };
+    test_particle.move_particle(1.5, 1.3, 1.2);	
+
+	let landmarks: Vec<Distance_or_Coordinate> = generate_landmarks();
+	let mut measurements: Vec<Distance_or_Coordinate> = take_measurement( test_particle,landmarks);
+	
+	for m in measurements.iter() {
+		println!("distances: ({},{})", measurements[(m.number-1) as usize].x,measurements[(m.number-1) as usize].y);	
+	}
+	//update(&mut v, measurements);
+
+
+	println!("gaussian is {}", gaussian_distribution(1., 1.0, 0.));
+
+
+    let y = rand::random::<f32>();
+    println!("{}", y);
+    
+}
+
+
+fn gaussian_distribution(mu: f32, sigma: f32, x: f32) -> f32 {
+
+	return f32::consts::E.powf(-1.0*((mu - x).powf(2.0)) / (sigma.powf(2.0)) / 2.0) / (2.0 * f32::consts::PI * (sigma.powf(2.0))).powf(0.5)
 
 }
-*/
-
-// 
-
-
-
-
-
 
