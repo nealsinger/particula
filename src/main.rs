@@ -22,10 +22,9 @@ use std::mem;
 use std::f32;
 
 
-struct Distance_or_Coordinate {
+struct Coordinate {
     x: f32,
     y: f32,
-    number: i32,
 }
 
 struct Particle {
@@ -42,47 +41,35 @@ impl Particle {
         self.y += d_y;
         self.heading += d_heading;
     }
-		
-    fn get_distances( self, distances: &mut Vec<Distance_or_Coordinate>, landmarks: Vec<Distance_or_Coordinate> ) ->  &mut Vec<Distance_or_Coordinate> {
-		
-		//let mut distances: Vec<Distance_or_Coordinate> = Vec::new();
-		for lm in landmarks.iter() {    	
-			distances.push(Distance_or_Coordinate {x: (self.x - lm.x).abs(), y: (self.y - lm.y).abs(), number: lm.number });
-			//println!("distance between particle and landmark {} is ({}, {}),", 
-			//lm.number, distances[(lm.number - 1) as usize].x , distances[(lm.number - 1) as usize].y );	
-			//Here's what's going on in the above line:
-			//1: vectors can only be indexed by usize types, so there's a cast.
-			//2: since landmarks start from one, there will be an off-by-one error unless you subtract 1.
-		}
-		return distances;
+
+    fn get_distances(&self, lm: &Coordinate) -> f32 {
+			 return ( ((self.x - lm.x).powf(2.0) + (self.y - lm.y).powf(2.0)).sqrt() );	
     }
+   
 }
 
 
-fn take_measurement(true_particle: Particle, landmarks: Vec<Distance_or_Coordinate>) -> Vec<Distance_or_Coordinate> {
+fn take_measurement(particle_at_actual_location: Particle, landmarks: Vec<Coordinate>) -> Vec<f32> {
 	
-	//let mut test_particle = Particle { x: 0., y: 0., heading: (3.141/2.) };
-	let mut samples: Vec<Distance_or_Coordinate> = Vec::new();
+	let mut sensor_noise: f32 = 0.005;
+	let mut samples: Vec<f32> = Vec::new();
 
-	true_particle.get_distances(&mut samples, landmarks);
-	let	sensor_noise = 0.02;
-	let noise = sensor_noise*gaussian_sample();
-	println!("noise is {}", noise);
-	for s in samples.iter_mut() {
-		println!("sample.x = {}", s.x);
-		(*s).x += noise;
-		(*s).y += noise;
+	for lm in landmarks.iter() {
+		let mut distance_measurement: f32 = ( (particle_at_actual_location.x - lm.x).powf(2.0) + (particle_at_actual_location.y - lm.y).powf(2.0) ).sqrt();
+		distance_measurement += sensor_noise*gaussian_sample();
+		
+		samples.push(distance_measurement);
+		println!("distance is {}", distance_measurement);
 	}
-
 	return samples;
 }
 
-fn generate_landmarks() -> Vec<Distance_or_Coordinate> {
-	let mut ls: Vec<Distance_or_Coordinate> = Vec::new();
-	ls.push(Distance_or_Coordinate{x: 0.0, y: 0.0, number: 1});
-	ls.push(Distance_or_Coordinate{x: 0.0, y: 10.0, number: 2});
-	ls.push(Distance_or_Coordinate{x: 10.0, y: 10.0, number: 3});
-	ls.push(Distance_or_Coordinate{x: 10.0, y: 0.0, number: 4});
+fn generate_landmarks() -> Vec<Coordinate> {
+	let mut ls: Vec<Coordinate> = Vec::new();
+	ls.push(Coordinate{x: 0.0, y: 0.0});
+	ls.push(Coordinate{x: 0.0, y: 10.0});
+	ls.push(Coordinate{x: 10.0, y: 10.0});
+	ls.push(Coordinate{x: 10.0, y: 0.0});
 	return ls;
 }
 
@@ -128,44 +115,37 @@ fn predict(particles: &mut Vec<Particle>, mut distance: f32, turning_angle: f32)
 	let d_heading: f32 = turning_angle + (turning_noise * gaussian_sample());
     for p in particles {        
         (*p).heading = (p.heading + d_heading) % (2.0*f32::consts::PI);
-      	let d_x: f32 = distance * p.heading.cos();	//all this reassignment is intentional,
-		let d_y: f32 = distance * p.heading.sin();	//it helps the compiler infer types.
-        (*p).x += d_x;
-        (*p).y += d_y; 
+        (*p).x += (distance * p.heading.cos()) as f32;//d_x;
+        (*p).y += (distance * p.heading.sin()) as f32;//d_y; 
         println!("particle is at ({}, {}), facing {} rads", p.x, p.y, p.heading);
     }
 }
 
 
-fn update(particles: &mut Vec<Particle>, measurements: Vec<Distance_or_Coordinate>) {
+fn update(particles: &mut Vec<Particle>, landmarks: Vec<Coordinate>, sensor_noise: f32, measurements: Vec<f32>) -> Vec<f32> {
 
 	let mut particle_weights: Vec<f32> = Vec::new();
 	
 	for _ in 0..particles.len() {
-		particle_weights.push(1.0);		
+		particle_weights.push(1.0);
 	}
 	println!("particle weights are {} {} {}", particle_weights[0], particle_weights[1], particle_weights[2]);
-
-	let mut mu: Vec<Distance_or_Coordinate> = Vec::new();
-
-	for p in particles {		
-		mu = p.get_distances();
-		//for m in mu {
-			
-		
-		//}
-	
-	}	
-	
-	
-	
+	for p in particles {
+		let mut weight: f32 = 1.0;
+		for (i, lm) in landmarks.iter().enumerate() {
+			p.get_distances(lm);
+			weight *= gaussian_distribution(p.get_distances(lm), sensor_noise, measurements[i]);
+		}
+		particle_weights.push(weight);
+	}
+	return particle_weights;
 }
 
 
 
 fn main() {
 
-    let mut v: Vec<Particle> = generate_particles(3);	
+    let mut v: Vec<Particle> = generate_particles(10);	
         
 	println!("length of particle vector is {}",v.len());      
 
@@ -174,11 +154,15 @@ fn main() {
     let mut test_particle = Particle { x: 0., y: 0., heading: (3.141/2.) };
     test_particle.move_particle(1.5, 1.3, 1.2);	
 
-	let landmarks: Vec<Distance_or_Coordinate> = generate_landmarks();
-	let mut measurements: Vec<Distance_or_Coordinate> = take_measurement( test_particle,landmarks);
+	let landmarks: Vec<Coordinate> = generate_landmarks();
+	let mut measurements: Vec<f32> = take_measurement( test_particle, landmarks);
+
+	update(v, landmarks, 0.001, measurements);
+
+
 	
 	for m in measurements.iter() {
-		println!("distances: ({},{})", measurements[(m.number-1) as usize].x,measurements[(m.number-1) as usize].y);	
+		//println!("distances: ({},{})", measurements[(m.number-1) as usize].x,measurements[(m.number-1) as usize].y);	
 	}
 	//update(&mut v, measurements);
 
