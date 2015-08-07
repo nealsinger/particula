@@ -9,7 +9,7 @@
 	}
 ------------------------------------------------
 let x: &[(f32, f32)] = &[(1.0,2.0), (3.0,9.0)];
-test_particle.get_distances(x);
+test_particle.get_distance(x);
 ------------------------------------------------	
 <niconii> neals: .pow() on integers, .powi() and .powf() on floats
 */
@@ -27,6 +27,12 @@ struct Coordinate {
     y: f32,
 }
 
+struct Noise {
+	distance_noise: f32,
+	turning_noise: f32,
+	sensor_noise: f32,
+}
+
 struct Particle {
     x: f32,
     y: f32,
@@ -36,20 +42,41 @@ struct Particle {
 
 
 impl Particle {
-    fn move_particle(&mut self, d_x: f32, d_y: f32, d_heading: f32) {
-        self.x += d_x;
-        self.y += d_y;
-        self.heading += d_heading;
-    }
 
-    fn get_distances(&self, lm: &Coordinate) -> f32 {
+    fn move_particle(&mut self, mut distance: f32, turning_angle: f32) {
+		
+	    self.heading = self.heading % (2.0*f32::consts::PI);
+	    self.x += (distance * self.heading.cos()) as f32;
+	    self.y += (distance * self.heading.sin()) as f32;
+	    println!("particle is at ({}, {}), facing {} rads", self.x, self.y, self.heading);
+    
+	}
+
+    fn get_distance(&self, lm: &Coordinate) -> f32 {
 			 return ( ((self.x - lm.x).powf(2.0) + (self.y - lm.y).powf(2.0)).sqrt() );	
     }
    
 }
 
 
-fn take_measurement(particle_at_actual_location: Particle, landmarks: Vec<Coordinate>) -> Vec<f32> {
+fn predict(particles: &mut Vec<Particle>, mut distance: f32, turning_angle: f32, noise_values: &Noise) {
+
+	for p in particles.iter_mut() {
+
+		let distance_with_noise: f32 = distance + noise_values.distance_noise * gaussian_sample();
+		let turning_angle_with_noise: f32 = turning_angle + (noise_values.turning_noise * gaussian_sample());
+
+		p.move_particle(distance_with_noise, turning_angle_with_noise);
+        		
+	}
+
+}
+
+
+
+
+
+fn take_measurement(particle_at_actual_location: Particle, landmarks: &Vec<Coordinate>) -> Vec<f32> {
 	
 	let mut sensor_noise: f32 = 0.005;
 	let mut samples: Vec<f32> = Vec::new();
@@ -87,8 +114,8 @@ fn generate_particles(n: i32) -> Vec<Particle> {
 	
     let mut rng = rand::thread_rng();    
     for i in 0..n {
-		let mut temp_x: f32 = rng.gen_range(-10.0f32, 4.0e1f32);
-		let mut temp_y: f32 = rng.gen_range(-10.0f32, 4.0e1f32);
+		let mut temp_x: f32 = rng.gen_range(0.0f32, 11.0e0f32);
+		let mut temp_y: f32 = rng.gen_range(0.0f32, 11.0e0f32);
 		let mut temp_heading: f32 = rng.gen_range(-10.0f32, 10.0e1f32) % 3.14159;				
 		
         v.push(Particle { x: temp_x, y: temp_y, heading: temp_heading});
@@ -105,37 +132,25 @@ fn gaussian_sample() -> f32 {
 }
 
 
-fn predict(particles: &mut Vec<Particle>, mut distance: f32, turning_angle: f32) {
-
-	let distance_noise: f32 = 0.25;
-	let turning_noise: f32 = 0.25;
-
-	distance += distance_noise * gaussian_sample();	
-	
-	let d_heading: f32 = turning_angle + (turning_noise * gaussian_sample());
-    for p in particles {        
-        (*p).heading = (p.heading + d_heading) % (2.0*f32::consts::PI);
-        (*p).x += (distance * p.heading.cos()) as f32;//d_x;
-        (*p).y += (distance * p.heading.sin()) as f32;//d_y; 
-        println!("particle is at ({}, {}), facing {} rads", p.x, p.y, p.heading);
-    }
-}
 
 
-fn update(particles: &mut Vec<Particle>, landmarks: Vec<Coordinate>, sensor_noise: f32, measurements: Vec<f32>) -> Vec<f32> {
+fn update(particles: &mut Vec<Particle>, landmarks: Vec<Coordinate>, measurements: Vec<f32>, noise_values: &Noise) -> Vec<f32> {
 
 	let mut particle_weights: Vec<f32> = Vec::new();
 	
-	for _ in 0..particles.len() {
-		particle_weights.push(1.0);
-	}
-	println!("particle weights are {} {} {}", particle_weights[0], particle_weights[1], particle_weights[2]);
-	for p in particles {
+//	println!("particle weights are {} {} {}", particle_weights[0], particle_weights[1], particle_weights[2]);
+	for (p_i,p) in particles.iter().enumerate() {
 		let mut weight: f32 = 1.0;
 		for (i, lm) in landmarks.iter().enumerate() {
-			p.get_distances(lm);
-			weight *= gaussian_distribution(p.get_distances(lm), sensor_noise, measurements[i]);
+			//println!("i is {}", i);
+			p.get_distance(lm);
+			println!("get distance is {}", p.get_distance(lm));
+			println!("gaussian values are {}, {}, {}", p.get_distance(lm), noise_values.sensor_noise, measurements[i]);
+			weight *= gaussian_distribution(p.get_distance(lm), noise_values.sensor_noise, measurements[i]);
+					println!("weight is {}", weight);
 		}
+		println!("particle i is {}", p_i);
+		println!("weight is {}", weight);
 		particle_weights.push(weight);
 	}
 	return particle_weights;
@@ -145,34 +160,50 @@ fn update(particles: &mut Vec<Particle>, landmarks: Vec<Coordinate>, sensor_nois
 
 fn main() {
 
-    let mut v: Vec<Particle> = generate_particles(10);	
+    let mut v: Vec<Particle> = generate_particles(1000);	
         
 	println!("length of particle vector is {}",v.len());      
 
-	predict(&mut v, 10.1, 3.141);	//args: array of particles, distance, heading.
+	let particle_noise = Noise {distance_noise: 3.0, turning_noise: 1.0, sensor_noise: 1.0};
 
-    let mut test_particle = Particle { x: 0., y: 0., heading: (3.141/2.) };
-    test_particle.move_particle(1.5, 1.3, 1.2);	
 
-	let landmarks: Vec<Coordinate> = generate_landmarks();
-	let mut measurements: Vec<f32> = take_measurement( test_particle, landmarks);
-
-	update(v, landmarks, 0.001, measurements);
-
+    let mut test_particle = Particle { x: 0., y: 0., heading: (0.0) };
+    test_particle.move_particle(10.0, 3.14159/2.0);	
 
 	
-	for m in measurements.iter() {
-		//println!("distances: ({},{})", measurements[(m.number-1) as usize].x,measurements[(m.number-1) as usize].y);	
-	}
-	//update(&mut v, measurements);
 
+	let landmarks: Vec<Coordinate> = generate_landmarks();
+	let mut measurements: Vec<f32> = take_measurement( test_particle, &landmarks);
+
+	predict(&mut v, 10.0, 3.14159/2.0, &particle_noise);	//args: array of particles, distance, heading.*
+
+//	for m in measurements.iter() { println!("m is {}", m); }
+
+	let mut probs: Vec<f32> = update(&mut v, landmarks, measurements, &particle_noise);
+	
+	for i in 0..probs.len() {
+		if  probs[i] > 0.00000001 {
+			println!("got one! {}", probs[i]);
+			println!("location is ({},{})", v[i].x, v[i].y);
+		}
+	}
+	
+	
+	println!("manual gaussian is {}", gaussian_distribution(28.213606, 0.001, 14.135057));
+/*
+-------> Next steps to make update function work:
+	1. Make it so that function calls to p.move() method us same principles as predict() function
+			Better yet, take funky code out of predict(), copy it into p.move() instead, and make predict() call p.move().
+			
+	2. move true_particle to (10, pi/2), get measurements, then call predict with (10, pi/2), and feed these into update().
+	
 
 	println!("gaussian is {}", gaussian_distribution(1., 1.0, 0.));
 
 
     let y = rand::random::<f32>();
     println!("{}", y);
-    
+*/    
 }
 
 
