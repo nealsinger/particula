@@ -16,11 +16,11 @@ test_particle.get_distance(x);
 
 
 extern crate rand;
-use rand::Rng;
+use rand::{thread_rng, Rng};
 use rand::distributions::normal::StandardNormal;
 use std::mem;
 use std::f32;
-
+use std::i32;
 
 struct Coordinate {
     x: f32,
@@ -48,7 +48,7 @@ impl Particle {
 	    self.heading = self.heading % (2.0*f32::consts::PI);
 	    self.x += (distance * self.heading.cos()) as f32;
 	    self.y += (distance * self.heading.sin()) as f32;
-	    println!("particle is at ({}, {}), facing {} rads", self.x, self.y, self.heading);
+//	    println!("particle is at ({}, {}), facing {} rads", self.x, self.y, self.heading);
     
 	}
 
@@ -114,8 +114,8 @@ fn generate_particles(n: i32) -> Vec<Particle> {
 	
     let mut rng = rand::thread_rng();    
     for i in 0..n {
-		let mut temp_x: f32 = rng.gen_range(0.0f32, 11.0e0f32);
-		let mut temp_y: f32 = rng.gen_range(0.0f32, 11.0e0f32);
+		let mut temp_x: f32 = rng.gen_range(-10.0f32, 11.0e0f32);
+		let mut temp_y: f32 = rng.gen_range(-10.0f32, 11.0e0f32);
 		let mut temp_heading: f32 = rng.gen_range(-10.0f32, 10.0e1f32) % 3.14159;				
 		
         v.push(Particle { x: temp_x, y: temp_y, heading: temp_heading});
@@ -127,7 +127,7 @@ fn generate_particles(n: i32) -> Vec<Particle> {
 
 fn gaussian_sample() -> f32 {
 	let StandardNormal(random_noise) = rand::random();
-	println!("gaussian sample is {}", random_noise);
+//	println!("gaussian sample is {}", random_noise);
 	return random_noise as f32;
 }
 
@@ -144,13 +144,13 @@ fn update(particles: &mut Vec<Particle>, landmarks: Vec<Coordinate>, measurement
 		for (i, lm) in landmarks.iter().enumerate() {
 			//println!("i is {}", i);
 			p.get_distance(lm);
-			println!("get distance is {}", p.get_distance(lm));
-			println!("gaussian values are {}, {}, {}", p.get_distance(lm), noise_values.sensor_noise, measurements[i]);
+//			println!("get distance is {}", p.get_distance(lm));
+//			println!("gaussian values are {}, {}, {}", p.get_distance(lm), noise_values.sensor_noise, measurements[i]);
 			weight *= gaussian_distribution(p.get_distance(lm), noise_values.sensor_noise, measurements[i]);
-					println!("weight is {}", weight);
+//					println!("weight is {}", weight);
 		}
-		println!("particle i is {}", p_i);
-		println!("weight is {}", weight);
+//		println!("particle i is {}", p_i);
+//		println!("weight is {}", weight);
 		particle_weights.push(weight);
 	}
 	return particle_weights;
@@ -158,52 +158,94 @@ fn update(particles: &mut Vec<Particle>, landmarks: Vec<Coordinate>, measurement
 
 
 
+
+
+
+
+fn find_index_of_max(unsorted_vector: &Vec<f32>) -> usize {
+//Rust doesn't support Ord for f32, so you can't use .max() or .cmp()
+
+	let mut max_value: f32 = 0.0;
+	let mut index_of_max_value: usize = 0;
+
+	for (i,value) in unsorted_vector.iter().enumerate() {
+		if (value - max_value) > 0.0 {
+			max_value = value.clone();
+			index_of_max_value = i;
+		}	
+	}
+	return index_of_max_value;
+}
+
+
+fn resample(particle_probabilities: &Vec<f32>, max_probabilty_index: usize) -> Vec<f32> {
+	let max_probability: f32 = particle_probabilities[max_probabilty_index];
+	let mut threshold: f32 = 0.0;
+	let mut rng = thread_rng();
+	let mut n: usize = rng.gen_range(0, particle_probabilities.len() as usize);
+	let mut resampled_probabilities: Vec<f32> = Vec::new();
+	for prob in particle_probabilities {
+		let temp_rand: f32 = rng.gen();	//TODO: move this to line below using type hinting
+		threshold += temp_rand * 2.0 * max_probability;
+		
+		while (threshold > particle_probabilities[n]) {
+			threshold -= particle_probabilities[n];
+//			println!("n is {}", n);
+			n = (n + 1) % particle_probabilities.len();
+		}
+		resampled_probabilities.push(particle_probabilities[n]);
+	}
+	return resampled_probabilities;
+}
+
+
+/*
+
+Todo: 
+1. add a probability trait to the particle struct, and modify rest of code accordingly.
+2. make loop that resamples particles, moves the true particle, takes a measurement, and feeds resampled particles into predict, and then into resample.
+3. make the above loop go for like three iterations, and print stats of particle with highest likelihood.
+
+*/
+
+
 fn main() {
 
-    let mut v: Vec<Particle> = generate_particles(1000);	
+    let mut v: Vec<Particle> = generate_particles(10000);	
         
 	println!("length of particle vector is {}",v.len());      
 
 	let particle_noise = Noise {distance_noise: 3.0, turning_noise: 1.0, sensor_noise: 1.0};
-
+	let landmarks: Vec<Coordinate> = generate_landmarks();
 
     let mut test_particle = Particle { x: 0., y: 0., heading: (0.0) };
     test_particle.move_particle(10.0, 3.14159/2.0);	
 
-	
-
-	let landmarks: Vec<Coordinate> = generate_landmarks();
 	let mut measurements: Vec<f32> = take_measurement( test_particle, &landmarks);
 
 	predict(&mut v, 10.0, 3.14159/2.0, &particle_noise);	//args: array of particles, distance, heading.*
 
-//	for m in measurements.iter() { println!("m is {}", m); }
-
-	let mut probs: Vec<f32> = update(&mut v, landmarks, measurements, &particle_noise);
-	
-	for i in 0..probs.len() {
-		if  probs[i] > 0.00000001 {
-			println!("got one! {}", probs[i]);
+	let mut probabilities: Vec<f32> = update(&mut v, landmarks, measurements, &particle_noise);
+/*	
+	for i in 0..probabilities.len() {
+		if  probabilities[i] > 1e-50f32 {	//this can be tuned for more or fewer particles
+			println!("got one! {}", probabilities[i]);
 			println!("location is ({},{})", v[i].x, v[i].y);
 		}
 	}
-	
+*/
+
+	let max_index: usize = find_index_of_max(&probabilities);
+	println!("max value is {}", max_index);
+	let resampled_probs: Vec<f32> = resample(&probabilities, max_index);
+	for i in 0..100 {
+		println!("resampled prob is {}", resampled_probs[i]);
+	}
 	
 	println!("manual gaussian is {}", gaussian_distribution(28.213606, 0.001, 14.135057));
-/*
--------> Next steps to make update function work:
-	1. Make it so that function calls to p.move() method us same principles as predict() function
-			Better yet, take funky code out of predict(), copy it into p.move() instead, and make predict() call p.move().
-			
-	2. move true_particle to (10, pi/2), get measurements, then call predict with (10, pi/2), and feed these into update().
-	
-
-	println!("gaussian is {}", gaussian_distribution(1., 1.0, 0.));
+    
 
 
-    let y = rand::random::<f32>();
-    println!("{}", y);
-*/    
 }
 
 
